@@ -1,4 +1,6 @@
+import PrismaClient from "../prisma";
 import axios from "axios";
+import { sign } from "jsonwebtoken";
 
 interface IAcessTokenResponse {
   access_token: string;
@@ -39,7 +41,41 @@ class AuthenticateUserService {
       }
     );
 
-    return response.data;
+    const { login, id, avatar_url, name } = response.data;
+
+    let user = await PrismaClient.user.findFirst({
+      where: {
+        github_id: id,
+      },
+    });
+
+    if (!user) {
+      user = await PrismaClient.user.create({
+        data: {
+          github_id: id,
+          login,
+          avatar_url,
+          name,
+        },
+      });
+    }
+
+    const token = sign(
+      {
+        user: {
+          name: user.name,
+          avatar_url: user.avatar_url,
+          id: user.id,
+        },
+      },
+      process.env.JWT_SECRET,
+      {
+        subject: user.id,
+        expiresIn: "1d",
+      }
+    );
+
+    return { token, user };
   }
 }
 
